@@ -1,13 +1,13 @@
 #pragma once
-#include "../../Utils/CRTVector.h"
+#include "../../Utils/Vector.h"
 
 class EdgeTexture {
-    CRTVector edgeColor;
-    CRTVector innerColor;
+    Vector edgeColor;
+    Vector innerColor;
     float edgeWidth;
 
 public:
-    EdgeTexture( const CRTVector& edgeColor, const CRTVector& innerColor, float edgeWidth);
+    EdgeTexture( const Vector& edgeColor, const Vector& innerColor, float edgeWidth);
 
-    CRTVector sample(float u, float v, const CRTVector& bary) const;
+    Vector sample(float u, float v, const Vector& bary) const;
 };

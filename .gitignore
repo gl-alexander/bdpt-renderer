@@ -31,3 +31,9 @@
 *.out
 *.app
 /.vs
+
+# CMake build output
+/SourceCode/build/
+
+# macOS
+.DS_Store

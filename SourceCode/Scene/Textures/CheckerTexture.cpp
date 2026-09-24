@@ -1,10 +1,10 @@
 #include "CheckerTexture.h"
 
-CheckerTexture::CheckerTexture(const CRTVector& colorA, const CRTVector& colorB, float squareSize)
+CheckerTexture::CheckerTexture(const Vector& colorA, const Vector& colorB, float squareSize)
 	: colorA(colorA), colorB(colorB), squareSize(squareSize)
 {}
 
-CRTVector CheckerTexture::sample(float u, float v, const CRTVector& bary) const
+Vector CheckerTexture::sample(float u, float v, const Vector& bary) const
 {
 	unsigned squareX = u / squareSize;
 	unsigned squareY = v / squareSize;

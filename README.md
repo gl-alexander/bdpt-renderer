@@ -1,17 +1,17 @@
-# ChaosRaytracer
+# BDPT Renderer
 
-A CPU ray tracer, part of the Chaos Ray Tracing course with added functionalities.
+A CPU ray tracer / bidirectional path tracer written from scratch.
 
 ### Base Functionalities
-<img src="https://github.com/Chaos-Ray-Tracing-Vladislav/chaos-ray-tracing-course-assignment-gl-alexander/blob/main/Images/Homework11/scene8_depth15.png" alt="Glass Dragon"/> <br>
+<img src="https://github.com/gl-alexander/bdpt-renderer/blob/main/Images/Homework11/scene8_depth15.png" alt="Glass Dragon"/> <br>
 - Support for Diffuse, Reflective and Refractive materials via shaders
 - Acceleration structures: [KD Tree](https://en.wikipedia.org/wiki/K-d_tree) for fast intersection checking
 - Multithreading: the final image is rendered in buckets of fixed size. Work is split between available threads.
 - Textures: bitmap textures, as well as debug textures
-- `.crtscene` file format parsing
+- `.scene` file format parsing
 
 ### Added functionalities
-<img src="https://github.com/Chaos-Ray-Tracing-Vladislav/chaos-ray-tracing-course-assignment-gl-alexander/blob/main/Images/Project/Animations/GI_random_sampling.gif" alt="Global Illumination"/> <br>
+<img src="https://github.com/gl-alexander/bdpt-renderer/blob/main/Images/Project/Animations/GI_random_sampling.gif" alt="Global Illumination"/> <br>
 - Path Tracing with explicit light sampling: ray path continues on non-specular hits (global illumination). Rays are "guided" towards a light source.
 - Anti-aliasing: [FXAA](https://en.wikipedia.org/wiki/Fast_approximate_anti-aliasing) implementation, Rendered AA (option for rays per pixel)
 - Animations module: separates mesh-manipulating animations from camera movement (to preserve KD Tree building). Supports orbit animation, as well as [Vertigo effect](https://en.wikipedia.org/wiki/Dolly_zoom) 
@@ -26,9 +26,9 @@ The algorithm simulates two ray paths for each sample: the camera path (as in th
 
 This technique allows for [caustics](https://en.wikipedia.org/wiki/Caustic_(optics)) to appear, due to the concentration of light rays in a tight area. These hits are then connected with the camera's lens, which allows us to see them in the final image.
 
-<img src="https://github.com/Chaos-Ray-Tracing-Vladislav/chaos-ray-tracing-course-assignment-gl-alexander/blob/main/Images/Project/BDPT/scene2_final.png" alt="Scene with caustics"/>
+<img src="https://github.com/gl-alexander/bdpt-renderer/blob/main/Images/Project/BDPT/scene2_final.png" alt="Scene with caustics"/>
 
-### [Project Presentation](https://github.com/Chaos-Ray-Tracing-Vladislav/chaos-ray-tracing-course-assignment-gl-alexander/blob/main/Images/Project/course-assignment-chaos.pdf): illustrates the added functionalities
+### [Project Presentation](https://github.com/gl-alexander/bdpt-renderer/blob/main/Images/Project/course-assignment-chaos.pdf): illustrates the added functionalities
 
 ### Sources
 - The ChaosCamp lectures

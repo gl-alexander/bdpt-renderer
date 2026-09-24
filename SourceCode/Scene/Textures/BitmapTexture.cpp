@@ -22,7 +22,7 @@ BitmapTexture::BitmapTexture(const std::string& imagePath)
 	}
 }
 
-CRTVector BitmapTexture::sample(float u, float v, const CRTVector& bary) const
+Vector BitmapTexture::sample(float u, float v, const Vector& bary) const
 {
 	int x = std::clamp(static_cast<int>(u * width), 0, width - 1);
 	int y = std::clamp(static_cast<int>((1 - v) * height), 0, height - 1);

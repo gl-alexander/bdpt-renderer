@@ -1,8 +1,8 @@
 #pragma once
 #include <vector>
-#include "CRTVector.h"
+#include "Vector.h"
 
-using CRTImage = std::vector<std::vector<CRTVector>>;
+using Image = std::vector<std::vector<Vector>>;
 
 // aggressive
 constexpr int FXAA_SEARCH_STEPS = 16;
@@ -15,9 +15,9 @@ constexpr float FXAA_SUBPIX_CAP = 1.0f;
 
 struct FXAA
 {
-	static float FXAALuminance(const CRTVector& rgb);
-	static float FXAAColorContrast(const CRTVector& a, const CRTVector& b);
-	static CRTVector FXAAPixel(CRTImage& image, unsigned x, unsigned y);
-	static void applyFXAA(CRTImage& image);
+	static float FXAALuminance(const Vector& rgb);
+	static float FXAAColorContrast(const Vector& a, const Vector& b);
+	static Vector FXAAPixel(Image& image, unsigned x, unsigned y);
+	static void applyFXAA(Image& image);
 };
 

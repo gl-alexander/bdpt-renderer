@@ -1,9 +1,9 @@
 #include "ConstantTexture.h"
 
-ConstantTexture::ConstantTexture(const CRTVector& color) : color(color)
+ConstantTexture::ConstantTexture(const Vector& color) : color(color)
 {}
 
-CRTVector ConstantTexture::sample(float u, float v, const CRTVector& bary) const
+Vector ConstantTexture::sample(float u, float v, const Vector& bary) const
 {
 	return color;
 }

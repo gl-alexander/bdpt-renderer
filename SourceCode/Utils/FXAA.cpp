@@ -1,23 +1,23 @@
 #include "FXAA.h"
 #include <iostream>
 
-float FXAA::FXAALuminance(const CRTVector& color)
+float FXAA::FXAALuminance(const Vector& color)
 {
     return 0.299 * color.x + 0.587 * color.y + 0.114 * color.z;
 }
 
-float FXAA::FXAAColorContrast(const CRTVector& a, const CRTVector& b)
+float FXAA::FXAAColorContrast(const Vector& a, const Vector& b)
 {
     return fabs(a.x - b.x) + fabs(a.y - b.y) + fabs(a.z - b.z);
 }
 
-CRTVector FXAA::FXAAPixel(CRTImage& image, unsigned x, unsigned y)
+Vector FXAA::FXAAPixel(Image& image, unsigned x, unsigned y)
 {
-    CRTVector rgbN = image[y - 1][x];
-    CRTVector rgbW = image[y][x - 1];
-    CRTVector rgbM = image[y][x];
-    CRTVector rgbE = image[y][x + 1];
-    CRTVector rgbS = image[y + 1][x];
+    Vector rgbN = image[y - 1][x];
+    Vector rgbW = image[y][x - 1];
+    Vector rgbM = image[y][x];
+    Vector rgbE = image[y][x + 1];
+    Vector rgbS = image[y + 1][x];
 
     float lumaN = FXAALuminance(rgbN);
     float lumaW = FXAALuminance(rgbW);
@@ -38,10 +38,10 @@ CRTVector FXAA::FXAAPixel(CRTImage& image, unsigned x, unsigned y)
     float blendL = std::max(0.0f, (rangeL / range) - FXAA_SUBPIX_TRIM) * FXAA_SUBPIX_CAP;
     blendL = std::min(FXAA_SUBPIX_CAP, blendL * 1.5f);
 
-    CRTVector rgbNW = image[y - 1][x - 1];
-    CRTVector rgbNE = image[y - 1][x + 1];
-    CRTVector rgbSW = image[y + 1][x - 1];
-    CRTVector rgbSE = image[y + 1][x + 1];
+    Vector rgbNW = image[y - 1][x - 1];
+    Vector rgbNE = image[y - 1][x + 1];
+    Vector rgbSW = image[y + 1][x - 1];
+    Vector rgbSE = image[y + 1][x + 1];
 
     float lumaNW = FXAALuminance(rgbNW);
     float lumaNE = FXAALuminance(rgbNE);
@@ -97,7 +97,7 @@ CRTVector FXAA::FXAAPixel(CRTImage& image, unsigned x, unsigned y)
     float finalBlend = std::min(1.0f, distN / (distN + distP));
     finalBlend *= blendL;
 
-    CRTVector rgbL = rgbN + rgbW + rgbM + rgbE + rgbS;
+    Vector rgbL = rgbN + rgbW + rgbM + rgbE + rgbS;
     rgbL += (rgbNW + rgbNE + rgbSW + rgbSE);
     rgbL *= (1.0 / 9.0);
 
@@ -110,7 +110,7 @@ CRTVector FXAA::FXAAPixel(CRTImage& image, unsigned x, unsigned y)
     return rgbM * (1.0f - combinedBlend) + rgbL * combinedBlend;
 }
 
-void FXAA::applyFXAA(CRTImage & image)
+void FXAA::applyFXAA(Image & image)
 {
     unsigned height, width;
     height = image.size();

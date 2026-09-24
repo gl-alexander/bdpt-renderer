@@ -11,14 +11,14 @@ static unsigned nearestPow2(unsigned n) {
 	return ++n;
 }
 
-KDTree::KDTree(const std::vector<CRTMesh>& objects, const std::vector<CRTMaterial>& materials, const CRTBox& sceneAABB) 
+KDTree::KDTree(const std::vector<Mesh>& objects, const std::vector<Material>& materials, const Box& sceneAABB) 
 	: objects(objects), materials(materials)
 {
 	NodeTriangles allTriangles;
 	int currTrianglesCount = 0;
 	objectTriangleCount.push_back(currTrianglesCount);
 	for (auto& mesh : objects) {
-		const std::vector<CRTTriangle> meshTriangles = std::move(mesh.getAllTriangles());
+		const std::vector<Triangle> meshTriangles = std::move(mesh.getAllTriangles());
 		for (int i = 0; i < meshTriangles.size(); i++) {
 			allTriangles.push_back({ meshTriangles[i], i + currTrianglesCount });
 		}
@@ -31,7 +31,7 @@ KDTree::KDTree(const std::vector<CRTMesh>& objects, const std::vector<CRTMateria
 	// if there are less triangles than MAX_TRIANGLES, then leafNodes is 0 and all triangles will be in the root box
 	unsigned maxNodesCount = allTriangles.size() + nearestPow2(allTriangles.size()) - 1;
 	nodes.reserve(maxNodesCount);
-	nodes.emplace_back(sceneAABB, INVALID_IND, INVALID_IND, INVALID_IND, NodeTriangles());
+	nodes.push_back({ sceneAABB, INVALID_IND, INVALID_IND, INVALID_IND, NodeTriangles() });
 	build(0, allTriangles, 0);
 }
 
@@ -44,7 +44,7 @@ void KDTree::build(int parentInd, const NodeTriangles& remainingTriangles, int d
 		return;
 	}
 
-	CRTBox first, second;
+	Box first, second;
 	nodes[parentInd].box.split(first, second, (AxisLabel)(depth % AXIS_COUNT));
 
 	NodeTriangles firstTriangles;
@@ -62,13 +62,13 @@ void KDTree::build(int parentInd, const NodeTriangles& remainingTriangles, int d
 	}
 	if (firstTriangles.size() > 0) {
 		int firstInd = nodes.size();
-		nodes.emplace_back(first, parentInd, INVALID_IND, INVALID_IND, NodeTriangles());
+		nodes.push_back({ first, parentInd, INVALID_IND, INVALID_IND, NodeTriangles() });
 		nodes[parentInd].leftInd = firstInd;
 		build(firstInd, firstTriangles, depth + 1);
 	}
 	if (secondTriangles.size() > 0) {
 		int secondInd = nodes.size();
-		nodes.emplace_back(second, parentInd, INVALID_IND, INVALID_IND, NodeTriangles());
+		nodes.push_back({ second, parentInd, INVALID_IND, INVALID_IND, NodeTriangles() });
 		nodes[parentInd].rightInd = secondInd;
 		build(secondInd, secondTriangles, depth + 1);
 	}
@@ -94,7 +94,7 @@ void KDTree::getMeshAndRelativeIndex(int triangleIndex, int& meshIndex, int& rel
 	relativeIndex = triangleIndex - objectTriangleCount[meshIndex];
 }
 
-Intersection KDTree::intersectLeaf(const CRTRay& ray, const NodeTriangles& triangles, float maxDistance) const
+Intersection KDTree::intersectLeaf(const Ray& ray, const NodeTriangles& triangles, float maxDistance) const
 {
 	Intersection intersection, triangle_intersection;
 	int meshIndex = 0, relativeIndex = 0;
@@ -105,7 +105,7 @@ Intersection KDTree::intersectLeaf(const CRTRay& ray, const NodeTriangles& trian
 			if (triangle_intersection.t < closestHitDitance && triangle_intersection.t <= maxDistance) {
 				getMeshAndRelativeIndex(tri.index, meshIndex, relativeIndex);
 				/*if (ray.type == RayType::SHADOW
-					&& materials[objects[meshIndex].getMaterialIndex()].type == CRTMaterialType::REFRACTIVE) {
+					&& materials[objects[meshIndex].getMaterialIndex()].type == MaterialType::REFRACTIVE) {
 					continue;
 				}*/
 				closestHitDitance = triangle_intersection.t;
@@ -123,7 +123,7 @@ Intersection KDTree::intersectLeaf(const CRTRay& ray, const NodeTriangles& trian
 	return intersection;
 }
 
-Intersection KDTree::intersect(const CRTRay& ray, float maxDistance) const
+Intersection KDTree::intersect(const Ray& ray, float maxDistance) const
 {
 	Intersection result;
 	result.t = FLOAT_MAX;

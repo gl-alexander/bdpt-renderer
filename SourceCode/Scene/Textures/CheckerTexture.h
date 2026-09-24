@@ -1,12 +1,12 @@
 #pragma once
-#include "../../Utils/CRTVector.h"
+#include "../../Utils/Vector.h"
 
 class CheckerTexture
 {
-	CRTVector colorA;
-	CRTVector colorB;
+	Vector colorA;
+	Vector colorB;
 	float squareSize;
 public:
-	CheckerTexture(const CRTVector& colorA, const CRTVector& colorB, float squareSize);
-	CRTVector sample(float u, float v, const CRTVector& bary) const;
+	CheckerTexture(const Vector& colorA, const Vector& colorB, float squareSize);
+	Vector sample(float u, float v, const Vector& bary) const;
 };
