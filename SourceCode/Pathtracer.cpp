@@ -244,7 +244,9 @@ std::vector<PathVertex> Pathtracer::tracePath(const Ray& initialRay, int maxLen)
 
 	if (initialRay.type == RayType::LIGHT) {
 		beta_running   = Vector(1, 1, 1);
-		pendingFwdPdf  = (float)(1.0 / (4.0 * PI_HI)); // uniform sphere
+		// pdf_fwd seed unused by MIS (misWeight recomputes light-side pdfs geometrically);
+		// AREA emission pdf is handled there. beta stays (1,1,1); emission applied at connection.
+		pendingFwdPdf  = (float)(1.0 / (4.0 * PI_HI));
 	}
 	else {
 		// Camera path: seed with We / pdf
@@ -319,6 +321,23 @@ std::vector<PathVertex> Pathtracer::tracePath(const Ray& initialRay, int maxLen)
 
 std::vector<PathVertex> Pathtracer::getLigthPath(const Light& light) const
 {
+	if (light.getType() == LightType::AREA) {
+		float pdfA;
+		Vector origin = light.samplePoint(pdfA);
+		// Cosine-weighted hemisphere about the light normal (Malley's method),
+		// matching the Lambertian emission profile and the cos/PI directional pdf
+		// that misWeight assumes for the first light edge.
+		Vector n = light.getNormal();
+		float u1 = randFloat(), u2 = randFloat();
+		float r = std::sqrt(u1), phi = (float)(2.0 * PI_HI) * u2;
+		float x = r * std::cos(phi), y = r * std::sin(phi), z = std::sqrt(std::max(0.0f, 1.0f - u1));
+		Vector up = std::abs(n.z) < 0.999f ? Vector(0, 0, 1) : Vector(1, 0, 0);
+		Vector t = cross(up, n).normalize();
+		Vector b = cross(n, t);
+		Vector dir = (t * x + b * y + n * z).normalize();
+		Ray areaRay{ origin, dir, RayType::LIGHT, 0 };
+		return tracePath(areaRay, LIGHT_PATH_LENGHT);
+	}
 	Vector randomDir = randomSphereSample();
 	Ray randomRay{ light.getPosition(), randomDir, RayType::LIGHT, 0 };
 	return tracePath(randomRay, LIGHT_PATH_LENGHT);
