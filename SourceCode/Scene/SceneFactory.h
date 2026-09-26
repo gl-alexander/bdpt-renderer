@@ -61,3 +61,6 @@ static const char* sceneMeshMaterialConstant = "constant";
 static const char* sceneMeshMaterialReflective = "reflective";
 static const char* sceneMeshMaterialRefractive = "refractive";
 static const char* sceneMeshMaterialIndexOfRefraction = "ior";
+static const char* sceneMeshMaterialEmissive = "emissive";
+static const char* sceneMeshMaterialEmission = "emission";
+static const char* sceneMeshMaterialLightIntensity = "intensity";
