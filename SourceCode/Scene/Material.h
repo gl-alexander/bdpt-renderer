@@ -9,7 +9,8 @@
 enum class MaterialType {
 	DIFFUSE,
 	REFLECTIVE,
-	REFRACTIVE
+	REFRACTIVE,
+	EMISSIVE
 };
 
 struct Material {
@@ -19,5 +20,6 @@ struct Material {
 	std::shared_ptr<Texture> texture;
 	bool smoothShading;
 	float ior;
+	Vector emission; // radiance colour when type == EMISSIVE; else unused
 };
 
