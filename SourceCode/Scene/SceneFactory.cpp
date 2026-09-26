@@ -1,4 +1,6 @@
 #include "SceneFactory.h"
+#include <algorithm>
+#include <stdexcept>
 
 #define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 using namespace rapidjson;
@@ -305,10 +307,17 @@ Scene* SceneFactory::factory(const char* filename)
 	// Each emissive object contributes one quad area light, derived from its
 	// first triangle: corner A, edges B-A and C-A (a two-triangle quad reconstructs
 	// the parallelogram). Intensity rides on the emissive material's ior slot.
+	std::vector<int> emissiveMatSeen;
 	for (const Mesh& obj : geometryObjects) {
 		int mi = obj.getMaterialIndex();
 		if (mi < 0 || mi >= (int)materials.size()) continue;
 		if (materials[mi].type != MaterialType::EMISSIVE) continue;
+		// s=0 maps a hit material back to one light; a shared emissive material would be ambiguous.
+		if (std::find(emissiveMatSeen.begin(), emissiveMatSeen.end(), mi) != emissiveMatSeen.end())
+			throw std::logic_error("emissive material shared across objects; give each area light its own material");
+		emissiveMatSeen.push_back(mi);
+		if (obj.getAllTriangles().size() != 2)
+			fprintf(stderr, "[warn] emissive object has %zu triangles; area light uses only the first triangle's quad\n", obj.getAllTriangles().size());
 		Triangle tri = obj.getAllTriangles()[0];
 		std::vector<Vector> tv = tri.getVertices();
 		Vector A = tv[0], B = tv[1], C = tv[2];

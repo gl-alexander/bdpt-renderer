@@ -501,7 +501,7 @@ float Pathtracer::misWeightS0(const std::vector<PathVertex>& camPath, int t, con
 
 
 
-Vector Pathtracer::directIllumination(const PathVertex& data, const Light& light) const
+Vector Pathtracer::directIllumination(const PathVertex& data, const Light& light, Vector& sampledLightPoint) const
 {
 	if (data.is_delta) return Vector(0, 0, 0);
 
@@ -518,6 +518,7 @@ Vector Pathtracer::directIllumination(const PathVertex& data, const Light& light
 		Vector brdf = evalBRDF(data, toL);
 		Vector Le   = light.emittedRadiance();
 		float geom  = (dist2 > 0.0f) ? cosSurf * cosLight / (dist2 * pdfA) : 0.0f;
+		sampledLightPoint = lp; // NEE connection endpoint, for the s=1 MIS weight
 		return data.beta * brdf * Le * geom;
 	}
 
@@ -670,12 +671,16 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 	    debugMode == BDPTDebugMode::DBG_S2_T2 || debugMode == BDPTDebugMode::DBG_S4_T1) {
 		for (const Light& light : lights) {
 			if (debugMode == BDPTDebugMode::DBG_S1_T2) {            // s=1,t=2: NEE at cameraPath[0]
-				if ((int)cameraPath.size() > 0 && !cameraPath[0].is_delta)
-					color += directIllumination(cameraPath[0], light);
+				if ((int)cameraPath.size() > 0 && !cameraPath[0].is_delta) {
+					Vector lp;
+					color += directIllumination(cameraPath[0], light, lp);
+				}
 			}
 			else if (debugMode == BDPTDebugMode::DBG_S1_T3) {      // s=1,t=3: NEE at cameraPath[1]
-				if ((int)cameraPath.size() > 1 && !cameraPath[1].is_delta)
-					color += directIllumination(cameraPath[1], light);
+				if ((int)cameraPath.size() > 1 && !cameraPath[1].is_delta) {
+					Vector lp;
+					color += directIllumination(cameraPath[1], light, lp);
+				}
 			}
 			else if (debugMode == BDPTDebugMode::DBG_S2_T2) {      // s=2,t=2: connect cam[0]-light[0]
 				std::vector<PathVertex> lightPath = getLigthPath(light);
@@ -694,15 +699,25 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 	for (const Light& light : lights) {
 		std::vector<PathVertex> lightPath = getLigthPath(light);
 
-		// s=1, t>=1: NEE (direct illumination from point light)
+		// s=1, t>=1: NEE (direct illumination from the light)
 		if (debugMode == BDPTDebugMode::ALL || debugMode == BDPTDebugMode::NEE_ONLY) {
 			for (int t = 0; t < (int)cameraPath.size(); t++) {
 				if (cameraPath[t].is_delta) continue;
-				Vector contrib = directIllumination(cameraPath[t], light);
+				Vector lp;
+				Vector contrib = directIllumination(cameraPath[t], light, lp);
 				float w = 1.0f;
 				if (debugMode == BDPTDebugMode::ALL) {
-					// Point light is a delta terminal (0 stored light verts).
-					w = misWeight(cameraPath, t + 1, lightPath, 0, light);
+					if (light.getType() == LightType::AREA) {
+						// Sampled emitter point is the single light-path vertex (s=1).
+						std::vector<PathVertex> neeLight(1);
+						neeLight[0].position = lp;
+						neeLight[0].normal   = light.getNormal();
+						neeLight[0].is_delta = false;
+						w = misWeight(cameraPath, t + 1, neeLight, 1, light);
+					} else {
+						// Point light is a delta terminal (0 stored light verts).
+						w = misWeight(cameraPath, t + 1, lightPath, 0, light);
+					}
 				}
 				// NEE_ONLY: weight=1 (raw estimator, no MIS)
 				color += contrib * w;

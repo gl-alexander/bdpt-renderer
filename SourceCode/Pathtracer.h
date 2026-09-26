@@ -71,7 +71,7 @@ class Pathtracer : public Raytracer
 
 	float misWeightS0(const std::vector<PathVertex>& camPath, int t, const Light& light) const;
 
-	Vector directIllumination(const PathVertex& data, const Light& light) const;
+	Vector directIllumination(const PathVertex& data, const Light& light, Vector& sampledLightPoint) const;
 	void castToImagePlane(const std::vector<PathVertex>& lightPath, int j,
 		const Light& light, Image& image) const;
 	Vector connectVertices(const std::vector<PathVertex>& cameraPath, int cameraNode,
