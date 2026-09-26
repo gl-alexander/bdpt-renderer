@@ -484,14 +484,37 @@ float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
 	return (float)(pUsed / denom);
 }
 
+// s=0: camera ray hit an emitter directly. Stub — real balance weight lands in Task 7.
+float Pathtracer::misWeightS0(const std::vector<PathVertex>& camPath, int t, const Light& light) const
+{
+	return 1.0f;
+}
+
 
 
 Vector Pathtracer::directIllumination(const PathVertex& data, const Light& light) const
 {
 	if (data.is_delta) return Vector(0, 0, 0);
+
+	if (light.getType() == LightType::AREA) {
+		float pdfA;
+		Vector lp = light.samplePoint(pdfA);
+		if (!connected(lp, data.position, data.normal)) return Vector(0, 0, 0);
+		Vector toL = lp - data.position;
+		float dist2 = toL.length2();
+		toL.normalize();
+		float cosSurf  = std::max(0.0f, dot(toL, data.normal));
+		float cosLight = std::max(0.0f, dot(-toL, light.getNormal())); // one-sided
+		if (cosSurf <= 0.0f || cosLight <= 0.0f) return Vector(0, 0, 0);
+		Vector brdf = evalBRDF(data, toL);
+		Vector Le   = light.emittedRadiance();
+		float geom  = (dist2 > 0.0f) ? cosSurf * cosLight / (dist2 * pdfA) : 0.0f;
+		return data.beta * brdf * Le * geom;
+	}
+
+	// POINT (unchanged)
 	if (!connected(light.getPosition(), data.position, data.normal))
 		return Vector(0, 0, 0);
-
 	Vector lightDir  = light.getPosition() - data.position;
 	float  dist2     = lightDir.length2();
 	lightDir.normalize();
@@ -520,15 +543,24 @@ Vector Pathtracer::connectVertices(const std::vector<PathVertex>& cameraPath, in
 	Vector brdfCam   = evalBRDF(cv, -connDir); // wOut at cam vert: toward light vert
 	Vector brdfLight = evalBRDF(lv,  connDir); // wOut at light vert: toward cam vert
 
-	Vector lightToV0 = lightPath[0].position - light.getPosition();
-	float  lightDist2 = lightToV0.length2();
-	float  cosEmit    = std::abs(dot(lightPath[0].normal, lightPath[0].wo));
-	float  intensityFactor = (lightDist2 > 0.0f) ? cosEmit * light.getIntensity() / (float)(4.0 * PI_HI * lightDist2) : 0.0f;
+	Vector emitTerm;
+	if (light.getType() == LightType::AREA) {
+		// Emitter vertex sits on the light; positional/directional pdfs live in MIS.
+		float cosEmit = std::max(0.0f, dot(lightPath[0].normal, lightPath[0].wo)); // one-sided
+		emitTerm = light.emittedRadiance() * cosEmit;
+	}
+	else {
+		Vector lightToV0 = lightPath[0].position - light.getPosition();
+		float  lightDist2 = lightToV0.length2();
+		float  cosEmit    = std::abs(dot(lightPath[0].normal, lightPath[0].wo));
+		float  f = (lightDist2 > 0.0f) ? cosEmit * light.getIntensity() / (float)(4.0 * PI_HI * lightDist2) : 0.0f;
+		emitTerm = Vector(f, f, f);
+	}
 
 	float  w = (debugMode == BDPTDebugMode::DBG_S2_T2) ? 1.0f
 	           : misWeight(cameraPath, cameraNode + 1, lightPath, lightNode + 1, light);
 
-	return cv.beta * lv.beta * brdfCam * brdfLight * G * intensityFactor * w;
+	return cv.beta * lv.beta * brdfCam * brdfLight * G * emitTerm * w;
 }
 
 void Pathtracer::castToImagePlane(const std::vector<PathVertex>& lightPath, int j,
@@ -568,10 +600,17 @@ void Pathtracer::castToImagePlane(const std::vector<PathVertex>& lightPath, int 
 	float cosAtCam = std::abs(dot(scene->getCamera().getFrontDirection(), toLight));
 	float G = (dist2 > 0.0f) ? (cosAtLv * cosAtCam / dist2) : 0.0f;
 
-	Vector lightToV0  = lightPath[0].position - light.getPosition();
-	float  lightDist2 = lightToV0.length2();
-	float  cosEmit    = std::abs(dot(lightPath[0].normal, lightPath[0].wo));
-	float  intensityFactor = (lightDist2 > 0.0f) ? cosEmit * light.getIntensity() / (float)(4.0 * PI_HI * lightDist2) : 0.0f;
+	Vector emitTerm;
+	if (light.getType() == LightType::AREA) {
+		float cosEmit = std::max(0.0f, dot(lightPath[0].normal, lightPath[0].wo)); // one-sided
+		emitTerm = light.emittedRadiance() * cosEmit;
+	} else {
+		Vector lightToV0  = lightPath[0].position - light.getPosition();
+		float  lightDist2 = lightToV0.length2();
+		float  cosEmit    = std::abs(dot(lightPath[0].normal, lightPath[0].wo));
+		float  f = (lightDist2 > 0.0f) ? cosEmit * light.getIntensity() / (float)(4.0 * PI_HI * lightDist2) : 0.0f;
+		emitTerm = Vector(f, f, f);
+	}
 
 	std::vector<PathVertex> emptyCamPath;
 	float w = (debugMode == BDPTDebugMode::DBG_S4_T1 || debugMode == BDPTDebugMode::LIGHTTRACE) ? 1.0f
@@ -579,7 +618,7 @@ void Pathtracer::castToImagePlane(const std::vector<PathVertex>& lightPath, int 
 
 	Vector brdfLight = evalBRDF(lv, toCam);
 
-	Vector contrib = lv.beta * brdfLight * we * G * intensityFactor * w;
+	Vector contrib = lv.beta * brdfLight * we * G * emitTerm * w;
 	static std::mutex splatMutex;
 	std::lock_guard<std::mutex> lock(splatMutex);
 	image[pixel.second][pixel.first] += contrib;
@@ -590,8 +629,8 @@ void Pathtracer::castToImagePlane(const std::vector<PathVertex>& lightPath, int 
 		s_sum += m; if (m < 1e-6) s_tiny++;
 		if (m > s_max) {
 			s_max = m;
-			fprintf(stderr,"[FACTORS] contrib=%.4g | beta=%.4g brdfL=%.4g we=%.6g G=%.6g If=%.4g dist2=%.4g lightDist2=%.4g cosAtLv=%.3f cosAtCam=%.3f\n",
-				m, lv.beta.x, brdfLight.x, we.x, G, intensityFactor, dist2, lightDist2, cosAtLv, cosAtCam);
+			fprintf(stderr,"[FACTORS] contrib=%.4g | beta=%.4g brdfL=%.4g we=%.6g G=%.6g emit=%.4g dist2=%.4g cosAtLv=%.3f cosAtCam=%.3f\n",
+				m, lv.beta.x, brdfLight.x, we.x, G, emitTerm.x, dist2, cosAtLv, cosAtCam);
 		}
 		g_contribSum = s_sum; g_contribMax = s_max; g_contribTiny = s_tiny;
 	}
@@ -609,6 +648,14 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 
 	std::vector<PathVertex> cameraPath = getCameraPath(cameraRay);
 	Vector color(0, 0, 0);
+
+	// s=0: camera subpath ends on an emitter. Map a hit material back to its area light.
+	auto emitterRadianceFor = [&](int materialIndex) -> const Light* {
+		for (const Light& l : lights)
+			if (l.getType() == LightType::AREA && l.getEmissiveMaterialIndex() == materialIndex)
+				return &l;
+		return nullptr;
+	};
 
 	if (debugMode == BDPTDebugMode::DBG_S1_T2 || debugMode == BDPTDebugMode::DBG_S1_T3 ||
 	    debugMode == BDPTDebugMode::DBG_S2_T2 || debugMode == BDPTDebugMode::DBG_S4_T1) {
@@ -666,6 +713,18 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 			for (int s = 0; s < (int)lightPath.size(); s++) {
 				castToImagePlane(lightPath, s, light, splat);
 			}
+		}
+	}
+
+	// s=0: camera ray hits an emitter directly (one-sided emission toward the eye).
+	if (debugMode == BDPTDebugMode::ALL) {
+		for (int t = 0; t < (int)cameraPath.size(); t++) {
+			const PathVertex& v = cameraPath[t];
+			if (v.is_delta) continue;
+			const Light* em = emitterRadianceFor(v.materialIndex);
+			if (!em) continue;
+			if (dot(v.normal, v.wo) <= 0.0f) continue; // eye on the dark side
+			color += v.beta * em->emittedRadiance() * misWeightS0(cameraPath, t + 1, *em);
 		}
 	}
 
