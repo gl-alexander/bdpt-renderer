@@ -465,8 +465,11 @@ Vector Raytracer::shade(const Ray& ray, const Intersection& data) const
             return shadeReflective(ray, data);
     }
     else if (material.type == MaterialType::REFRACTIVE) {
-        if (scene->getSettings().refractions) 
+        if (scene->getSettings().refractions)
             return shadeRefractive(ray, data);
+    }
+    else if (material.type == MaterialType::EMISSIVE) {
+        return material.emission * material.ior; // ior slot carries emission intensity
     }
     else {
         assert(false);
