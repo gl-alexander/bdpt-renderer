@@ -24,7 +24,7 @@ class SceneFactory {
 	static std::vector<Mesh> parseObjects(const rapidjson::Document& doc, Box& AABB);
 	static std::vector<Material> parseMaterials(const rapidjson::Document& doc, const TextureMap& textures);
 
-public: 
+public:
 	static Scene* factory(const char* filename);
 };
 
@@ -61,4 +61,3 @@ static const char* sceneMeshMaterialConstant = "constant";
 static const char* sceneMeshMaterialReflective = "reflective";
 static const char* sceneMeshMaterialRefractive = "refractive";
 static const char* sceneMeshMaterialIndexOfRefraction = "ior";
-

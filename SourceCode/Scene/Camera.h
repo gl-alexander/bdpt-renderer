@@ -5,7 +5,7 @@
 #include "../Utils/Matrix.h"
 #include "../Utils/Ray.h"
 
-static const float DEFAULT_FOV = 90;
+static const float DEFAULT_FOV = 50;
 
 class Camera
 {

@@ -16,11 +16,11 @@ Image testAccelerated(Raytracer& renderer) {
 	return result;
 }
 
-void GI_test(void) {
-    Scene* scene = SceneFactory::factory("Scenes/scene2.scene");
+void GI_test(const char* scenePath, const char* outPath) {
+    Scene* scene = SceneFactory::factory(scenePath);
 	Pathtracer pathtracer(scene);
 
-	ImageSaver::saveImage("Images/Project/pt_scene2.ppm", testAccelerated(pathtracer));
+	pathtracer.renderScene(outPath);
 	delete scene;
 }
 
@@ -43,9 +43,11 @@ void dragonAnimation(void) {
 	delete scene;
 }
 
-int main()
+int main(int argc, char** argv)
 {
-	GI_test();
-    GI_animation();
-    dragonAnimation();
+	const char* scenePath = (argc > 1) ? argv[1] : "Scenes/glass_dragon.scene";
+	const char* outPath   = (argc > 2) ? argv[2] : "Images/Project/pt_scene2.ppm";
+	GI_test(scenePath, outPath);
+	// GI_animation();
+	// dragonAnimation();
 }
