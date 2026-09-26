@@ -276,7 +276,7 @@ std::vector<PathVertex> Pathtracer::tracePath(const Ray& initialRay, int maxLen)
 		vert.beta         = beta_running;
 		vert.pdf_fwd      = pendingFwdPdf;
 		vert.materialIndex = ix.materialIndex;
-		vert.is_delta     = (material.type != MaterialType::DIFFUSE);
+		vert.is_delta     = (material.type == MaterialType::REFLECTIVE || material.type == MaterialType::REFRACTIVE);
 		vert.is_light     = false;
 		// Pre-sample albedo so evalBRDF works for textured materials at connection time
 		vert.albedo       = scene->getGeometryObject(ix.hitObjectIndex).sampleMaterial(material, ix);
@@ -457,7 +457,14 @@ float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
 
 		if (sp >= 1) {
 			edge(lightPos, x[0].pos);
-			p *= pdfWtoA((float)(1.0 / (4.0 * PI_HI)), std::abs(dot(x[0].nrm, dir)), (float)d2);
+			if (light.getType() == LightType::AREA) {
+				// emitter: 1/area positional pdf (area measure) x cosine-hemisphere directional pdf
+				double cosEmit = dot(light.getNormal(), dir);
+				double pdfW = (cosEmit > 0.0) ? cosEmit / PI_HI : 0.0;
+				p *= (1.0 / light.getArea()) * pdfWtoA((float)pdfW, std::abs(dot(x[0].nrm, dir)), (float)d2);
+			} else {
+				p *= pdfWtoA((float)(1.0 / (4.0 * PI_HI)), std::abs(dot(x[0].nrm, dir)), (float)d2);
+			}
 			for (int i = 1; i < sp; ++i) {
 				edge(x[i - 1].pos, x[i].pos);
 				p *= scatterEdge(x[i - 1], x[i], dir, d2);
@@ -484,10 +491,12 @@ float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
 	return (float)(pUsed / denom);
 }
 
-// s=0: camera ray hit an emitter directly. Stub — real balance weight lands in Task 7.
+// s=0: camera ray hit an emitter directly. Balance weight vs. the strategies that
+// could also have produced this path (NEE / connection / light-tracing to the emitter).
 float Pathtracer::misWeightS0(const std::vector<PathVertex>& camPath, int t, const Light& light) const
 {
-	return 1.0f;
+	std::vector<PathVertex> emptyLightPath;
+	return misWeight(camPath, t, emptyLightPath, 0, light);
 }
 
 
