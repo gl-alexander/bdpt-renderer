@@ -39,6 +39,7 @@ public:
 	const Camera& getCamera() const;
 	void setCamera(const Camera& camera);
 	const Settings& getSettings() const;
+	void setRaysPerPixel(int raysPerPixel);
 	const std::vector<Light>& getLights() const;
 	const Light& getRandomLight() const;
 	const Box& getAABB() const;

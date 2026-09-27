@@ -18,6 +18,10 @@ static std::atomic<double> g_contribSum{0.0}; // sum of splatted contrib magnitu
 static std::atomic<double> g_contribMax{0.0}; // max single splatted contrib magnitude
 static std::atomic<long> g_contribTiny{0};    // splats with magnitude < 1e-6
 
+// Max per-splat contribution magnitude (RGB sum). Measured: normal splats <= ~47,
+// glass-firefly cluster starts ~180. 50 separates them. See castToImagePlane.
+static constexpr float FIREFLY_SPLAT_CLAMP = 20.0f;
+
 Pathtracer::Pathtracer(Scene* scene) : Raytracer(scene)
 {
 	// Optional debug-pass override via env var BDPT_DBG
@@ -650,6 +654,12 @@ void Pathtracer::castToImagePlane(const std::vector<PathVertex>& lightPath, int 
 	Vector brdfLight = evalBRDF(lv, toCam);
 
 	Vector contrib = lv.beta * brdfLight * we * G * emitTerm * w;
+	// Firefly clamp: rare multi-bounce glass paths blow up lv.beta (measured beta up to ~1000,
+	// contrib up to ~2000) via the specular 1/prob and (n1/n2)^2 chain in spawnRefractRay. That is
+	// legitimate but near-zero-probability energy that won't average out; cap the per-splat
+	// contribution so a single sample can't dump a firefly
+	if (const float e = contrib.x + contrib.y + contrib.z; e > FIREFLY_SPLAT_CLAMP)
+		contrib *= FIREFLY_SPLAT_CLAMP / e;
 	static std::mutex splatMutex;
 	std::lock_guard<std::mutex> lock(splatMutex);
 	image[pixel.second][pixel.first] += contrib;

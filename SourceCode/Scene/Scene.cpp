@@ -48,6 +48,11 @@ const Settings& Scene::getSettings() const
 	return settings;
 }
 
+void Scene::setRaysPerPixel(int raysPerPixel)
+{
+	settings.raysPerPixel = raysPerPixel;
+}
+
 const std::vector<Light>& Scene::getLights() const {
 	return lights;
 }

@@ -24,7 +24,7 @@ struct Settings
 	bool FXAA = false;
 
 	bool renderedAA = true;
-	int raysPerPixel = 256;
+	int raysPerPixel = 1028;
 
 	bool dof = false;
 	bool autoFocus = true;
@@ -33,8 +33,7 @@ struct Settings
 	float fNum = 2.0;
 
 	bool stereoscopy = false;
-	float eyeDistance = 0.2f; 
+	float eyeDistance = 0.2f;
 	Vector leftEyeColor{ 1, 0, 0 };
 	Vector rightEyeColor{ 0, 0, 1 };
 };
-

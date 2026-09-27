@@ -3,6 +3,7 @@
 #include "Scene/Animation.h"
 #include "Scene/SceneFactory.h"
 #include <chrono>
+#include <cstdlib>
 
 using namespace std::chrono;
 
@@ -16,8 +17,9 @@ Image testAccelerated(Raytracer& renderer) {
 	return result;
 }
 
-void GI_test(const char* scenePath, const char* outPath) {
+void GI_test(const char* scenePath, const char* outPath, int raysPerPixel) {
     Scene* scene = SceneFactory::factory(scenePath);
+	if (raysPerPixel > 0) scene->setRaysPerPixel(raysPerPixel);
 	Pathtracer pathtracer(scene);
 	pathtracer.renderScene(outPath);
 	delete scene;
@@ -46,7 +48,8 @@ int main(int argc, char** argv)
 {
 	const char* scenePath = (argc > 1) ? argv[1] : "Scenes/glass_dragon.scene";
 	const char* outPath   = (argc > 2) ? argv[2] : "Images/Project/pt_scene2.ppm";
-	GI_test(scenePath, outPath);
+	int raysPerPixel      = (argc > 3) ? std::atoi(argv[3]) : 0;  // 0 = use scene/Settings default
+	GI_test(scenePath, outPath, raysPerPixel);
 	// GI_animation();
 	// dragonAnimation();
 }

@@ -2,14 +2,18 @@
 #include <iostream>
 #include <random>
 #include <thread>
+#include <atomic>
+#include <cstdint>
 
 constexpr float EPSILON = 0.00001;
 constexpr float PI = 3.1415;
 
-// Per-thread PRNG: rand() shares one global stream across render threads
 inline std::mt19937& rng() {
-	thread_local std::mt19937 gen(std::random_device{}() ^
-		(std::hash<std::thread::id>{}(std::this_thread::get_id())));
+	static std::atomic<uint32_t> counter{0};
+	thread_local std::mt19937 gen([] {
+		std::seed_seq seq{ std::random_device{}(), counter.fetch_add(1) };
+		return std::mt19937(seq);
+	}());
 	return gen;
 }
 
