@@ -19,7 +19,6 @@ Image testAccelerated(Raytracer& renderer) {
 void GI_test(const char* scenePath, const char* outPath) {
     Scene* scene = SceneFactory::factory(scenePath);
 	Pathtracer pathtracer(scene);
-
 	pathtracer.renderScene(outPath);
 	delete scene;
 }

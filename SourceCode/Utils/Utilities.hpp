@@ -1,16 +1,25 @@
 #pragma once
 #include <iostream>
+#include <random>
+#include <thread>
 
 constexpr float EPSILON = 0.00001;
 constexpr float PI = 3.1415;
 
+// Per-thread PRNG: rand() shares one global stream across render threads
+inline std::mt19937& rng() {
+	thread_local std::mt19937 gen(std::random_device{}() ^
+		(std::hash<std::thread::id>{}(std::this_thread::get_id())));
+	return gen;
+}
+
 // generates a random float between 0 and 1
 inline float randFloat() {
-	return (float)rand() / RAND_MAX;
+	return std::uniform_real_distribution<float>(0.0f, 1.0f)(rng());
 }
 
 inline int randomInt(int start, int end) {
-	return rand() % (end - start) + start;
+	return std::uniform_int_distribution<int>(start, end - 1)(rng());
 }
 
 // clams the value between start and end

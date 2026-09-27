@@ -24,7 +24,7 @@ struct Settings
 	bool FXAA = false;
 
 	bool renderedAA = true;
-	int raysPerPixel = 128;
+	int raysPerPixel = 256;
 
 	bool dof = false;
 	bool autoFocus = true;

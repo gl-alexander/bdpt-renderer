@@ -335,7 +335,7 @@ std::vector<PathVertex> Pathtracer::getLigthPath(const Light& light) const
 		Vector t = cross(up, n).normalize();
 		Vector b = cross(n, t);
 		Vector dir = (t * x + b * y + n * z).normalize();
-		Ray areaRay{ origin, dir, RayType::LIGHT, 0 };
+		Ray areaRay{ origin + n * SHADOW_BIAS, dir, RayType::LIGHT, 0 }; // bias off the emitter to avoid self-hit
 		return tracePath(areaRay, LIGHT_PATH_LENGHT);
 	}
 	Vector randomDir = randomSphereSample();
@@ -426,6 +426,12 @@ float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
 	const Light& light) const
 {
 	const int k = s + t; // stored connected-path vertices
+	if (k < 1) return 1.0f;
+	if (k == 1) {
+		// Give s=0 full weight and the emitter-vertex splat zero — kills double count
+		if (light.getType() != LightType::AREA) return 1.0f;
+		return (s == 0) ? 1.0f : 0.0f;
+	}
 	if (k < 2) return 1.0f; // single stored vertex => only one realizable strategy
 
 	// Combined chain x[0..k-1]: light-side first, then camera-side reversed.
@@ -456,18 +462,27 @@ float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
 		auto edge = [&](const Vector& a, const Vector& b) { Vector d = b - a; d2 = d.length2(); dir = d; dir.normalize(); };
 
 		if (sp >= 1) {
-			edge(lightPos, x[0].pos);
 			if (light.getType() == LightType::AREA) {
-				// emitter: 1/area positional pdf (area measure) x cosine-hemisphere directional pdf
-				double cosEmit = dot(light.getNormal(), dir);
-				double pdfW = (cosEmit > 0.0) ? cosEmit / PI_HI : 0.0;
-				p *= (1.0 / light.getArea()) * pdfWtoA((float)pdfW, std::abs(dot(x[0].nrm, dir)), (float)d2);
+				// Emitter point sampled ON the quad: pdf = 1/area (area measure), no directional
+				// factor. The cosine emission pdf only appears on the emitter->next edge (sp>=2).
+				p *= 1.0 / light.getArea();
+				for (int i = 1; i < sp; ++i) {
+					edge(x[i - 1].pos, x[i].pos);
+					if (i == 1) {
+						double cosEmit = dot(light.getNormal(), dir);
+						double pdfW = (cosEmit > 0.0) ? cosEmit / PI_HI : 0.0;
+						p *= pdfWtoA((float)pdfW, std::abs(dot(x[1].nrm, dir)), (float)d2);
+					} else {
+						p *= scatterEdge(x[i - 1], x[i], dir, d2);
+					}
+				}
 			} else {
+				edge(lightPos, x[0].pos);
 				p *= pdfWtoA((float)(1.0 / (4.0 * PI_HI)), std::abs(dot(x[0].nrm, dir)), (float)d2);
-			}
-			for (int i = 1; i < sp; ++i) {
-				edge(x[i - 1].pos, x[i].pos);
-				p *= scatterEdge(x[i - 1], x[i], dir, d2);
+				for (int i = 1; i < sp; ++i) {
+					edge(x[i - 1].pos, x[i].pos);
+					p *= scatterEdge(x[i - 1], x[i], dir, d2);
+				}
 			}
 		}
 
@@ -478,6 +493,12 @@ float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
 				edge(x[i + 1].pos, x[i].pos);
 				p *= scatterEdge(x[i + 1], x[i], dir, d2);
 			}
+		} else {
+			// tp == 0: whole path is light-generated; its last vertex connects to the
+			// pinhole. Pay the camera-importance density here so this (t=1 splat) strategy
+			// is measured on the same footing as the eye strategies that pay cameraPdfW.
+			edge(camPos, x[k - 1].pos);
+			p *= pdfWtoA(cameraPdfW(dir), std::abs(dot(x[k - 1].nrm, dir)), (float)d2);
 		}
 		return p;
 	};
@@ -555,9 +576,9 @@ Vector Pathtracer::connectVertices(const std::vector<PathVertex>& cameraPath, in
 
 	Vector emitTerm;
 	if (light.getType() == LightType::AREA) {
-		// Emitter vertex sits on the light; positional/directional pdfs live in MIS.
-		float cosEmit = std::max(0.0f, dot(lightPath[0].normal, lightPath[0].wo)); // one-sided
-		emitTerm = light.emittedRadiance() * cosEmit;
+		// Emitter throughput = L_e / (p_A * p_omega) with the emission cosine cancelling
+		// p_omega's cos: L_e * area * pi. Positional/directional pdfs live in MIS only.
+		emitTerm = light.emittedRadiance() * (float)(light.getArea() * PI_HI);
 	}
 	else {
 		Vector lightToV0 = lightPath[0].position - light.getPosition();
@@ -612,8 +633,8 @@ void Pathtracer::castToImagePlane(const std::vector<PathVertex>& lightPath, int 
 
 	Vector emitTerm;
 	if (light.getType() == LightType::AREA) {
-		float cosEmit = std::max(0.0f, dot(lightPath[0].normal, lightPath[0].wo)); // one-sided
-		emitTerm = light.emittedRadiance() * cosEmit;
+		// Emitter throughput = L_e * area * pi (see connectVertices); pdfs live in MIS.
+		emitTerm = light.emittedRadiance() * (float)(light.getArea() * PI_HI);
 	} else {
 		Vector lightToV0  = lightPath[0].position - light.getPosition();
 		float  lightDist2 = lightToV0.length2();
@@ -727,7 +748,8 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 		if (debugMode == BDPTDebugMode::ALL) {
 			for (int t = 1; t <= (int)cameraPath.size(); t++) {
 				for (int s = 1; s <= (int)lightPath.size(); s++) {
-					color += connectVertices(cameraPath, t - 1, lightPath, s - 1, light);
+					Vector cc = connectVertices(cameraPath, t - 1, lightPath, s - 1, light);
+					color += cc;
 				}
 			}
 		}
