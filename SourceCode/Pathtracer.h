@@ -1,12 +1,10 @@
 #pragma once
 #include "Raytracer.h"
+#include "Utils/BSDF.h"
 
 constexpr float MIN_INTENSITY = 0.001f;
 constexpr int CAM_PATH_LENGHT = 5;
 constexpr int LIGHT_PATH_LENGHT = 5;
-
-// High-precision PI for all pdf / We math (global PI=3.1415f is too coarse)
-constexpr double PI_HI = 3.14159265358979323846;
 
 struct PathVertex {
 	Vector position;      // surface hit point
@@ -21,15 +19,7 @@ struct PathVertex {
 	bool   is_light;      // true only for the synthetic point-light vertex
 };
 
-// Return value of all spawnXxxRay helpers
-struct ScatterSample {
-	Vector origin;       // next ray origin (with surface bias already applied)
-	Vector dir;          // next ray direction (unit)
-	Vector betaFactor;   // multiply into running beta: (albedo/PI)*cos/pdf for diffuse; reflectance/discreteProb for specular
-	float  pdf_dir;      // continuous solid-angle pdf (0.0 for delta)
-	float  discreteProb; // discrete branch probability (1.0 for diffuse/pure-reflect; fresnel or 1-fresnel for refract)
-	bool   isDelta;
-};
+// ScatterSample and the BSDF sampling helpers live in Utils/BSDF.h.
 
 enum class BDPTDebugMode {
 	ALL,        // normal MIS-combined render
@@ -46,11 +36,6 @@ enum class BDPTDebugMode {
 class Pathtracer : public Raytracer
 {
 	std::vector<PathVertex> tracePath(const Ray& initialRay, int maxLen) const;
-
-	ScatterSample spawnRay(const Intersection& data, const Vector& vec_in) const;
-	ScatterSample spawnDiffuseRay(const Intersection& data, const Vector& vec_in) const;
-	ScatterSample spawnReflectRay(const Intersection& data, const Vector& vec_in) const;
-	ScatterSample spawnRefractRay(const Intersection& data, const Vector& vec_in) const;
 
 	float cameraPdfW(const Vector& dir) const;
 	Vector cameraWe(const Vector& dir, std::pair<int, int>& outPixel) const;
