@@ -19,13 +19,12 @@ static std::atomic<double> g_contribSum{0.0}; // sum of splatted contrib magnitu
 static std::atomic<double> g_contribMax{0.0}; // max single splatted contrib magnitude
 static std::atomic<long> g_contribTiny{0};    // splats with magnitude < 1e-6
 
-// Max per-splat contribution magnitude (RGB sum). Measured: normal splats <= ~47,
-// glass-firefly cluster starts ~180. 50 separates them. See castToImagePlane.
+// Max per-splat contribution magnitude (RGB sum)
 static constexpr float FIREFLY_SPLAT_CLAMP = 20.0f;
 
 Pathtracer::Pathtracer(Scene* scene) : Raytracer(scene)
 {
-	// Optional debug-pass override via env var BDPT_DBG
+	// optional debug-pass override via env var BDPT_DBG
 	if (const char* m = std::getenv("BDPT_DBG")) {
 		if      (!std::strcmp(m, "S1_T2")) debugMode = BDPTDebugMode::DBG_S1_T2;
 		else if (!std::strcmp(m, "S1_T3")) debugMode = BDPTDebugMode::DBG_S1_T3;
@@ -47,7 +46,7 @@ Image Pathtracer::renderScene() const
 	const unsigned imageWidth = scene->getSettings().imageSettings.width;
 
 	Image image(imageHeight, std::vector<Vector>(imageWidth, scene->getSettings().bgColor));
-	// Separate accumulation buffer for light-tracing (t=1) splats.  Splats land in
+	// separate accumulation buffer for light-tracing (t=1) splats - splats land in
 	// arbitrary pixels, so they cannot share the camera-path buffer
 	Image splat(imageHeight, std::vector<Vector>(imageWidth, Vector(0, 0, 0)));
 
@@ -69,7 +68,7 @@ Image Pathtracer::renderScene() const
 
 	const float mult = 1.0f / scene->getSettings().raysPerPixel;
 
-	// Resolve the linear HDR radiance (camera path + light-tracing splats) in place,
+	// resolve the linear HDR radiance (camera path + light-tracing splats) in place,
 	// then apply the display transform (auto-exposure + Reinhard + gamma).
 	for (unsigned r = 0; r < imageHeight; r++)
 		for (unsigned c = 0; c < imageWidth; c++)
@@ -154,16 +153,16 @@ std::vector<PathVertex> Pathtracer::tracePath(const Ray& initialRay, int maxLen)
 		Vector normal = material.smoothShading ? ix.smoothNormal : ix.faceNormal;
 
 		PathVertex vert;
-		vert.position     = ix.hitPoint;
-		vert.normal       = normal;
-		vert.wo           = (-currRay.direction).normalize(); // unit dir toward previous vertex
-		vert.beta         = beta_running;
-		vert.pdf_fwd      = pendingFwdPdf;
+		vert.position = ix.hitPoint;
+		vert.normal = normal;
+		vert.wo = (-currRay.direction).normalize(); // unit dir toward previous vertex
+		vert.beta = beta_running;
+		vert.pdf_fwd = pendingFwdPdf;
 		vert.materialIndex = ix.materialIndex;
-		vert.is_delta     = (material.type == MaterialType::REFLECTIVE || material.type == MaterialType::REFRACTIVE);
-		vert.is_light     = false;
+		vert.is_delta = (material.type == MaterialType::REFLECTIVE || material.type == MaterialType::REFRACTIVE);
+		vert.is_light = false;
 		// Pre-sample albedo so evalBRDF works for textured materials at connection time
-		vert.albedo       = scene->getGeometryObject(ix.hitObjectIndex).sampleMaterial(material, ix);
+		vert.albedo = scene->getGeometryObject(ix.hitObjectIndex).sampleMaterial(material, ix);
 
 		ScatterSample sample = BSDF::spawnRay(scene, ix, currRay.direction);
 
@@ -208,9 +207,8 @@ std::vector<PathVertex> Pathtracer::getLigthPath(const Light& light) const
 	if (light.getType() == LightType::AREA) {
 		float pdfA;
 		Vector origin = light.samplePoint(pdfA);
-		// Cosine-weighted hemisphere about the light normal (Malley's method),
-		// matching the Lambertian emission profile and the cos/PI directional pdf
-		// that misWeight assumes for the first light edge.
+		// cosine-weighted hemisphere about the light normal
+		// matching Lambertian emission profile and the cos/PI directional pdf
 		Vector n = light.getNormal();
 		float u1 = randFloat(), u2 = randFloat();
 		float r = std::sqrt(u1), phi = (float)(2.0 * PI_HI) * u2;
@@ -305,95 +303,121 @@ Vector Pathtracer::evalBRDF(const PathVertex& vert, const Vector& wOut) const
 	return vert.albedo * (float)(1.0 / PI_HI);
 }
 
-float Pathtracer::misWeight(const std::vector<PathVertex>& camPath, int t,
-	const std::vector<PathVertex>& lightPath, int s,
-	const Light& light) const
-{
-	const int k = s + t; // stored connected-path vertices
-	if (k < 1) return 1.0f;
-	if (k == 1) {
-		// Give s=0 full weight and the emitter-vertex splat zero — kills double count
-		if (light.getType() != LightType::AREA) return 1.0f;
-		return (s == 0) ? 1.0f : 0.0f;
-	}
-	if (k < 2) return 1.0f; // single stored vertex => only one realizable strategy
+float Pathtracer::misWeight(const std::vector<PathVertex> &camPath, int t,
+                            const std::vector<PathVertex> &lightPath, int s,
+                            const Light &light) const {
+  const int k = s + t;
+  if (k < 1)
+    return 1.0f;
+  if (k == 1) {
+    // Give s=0 full weight and the emitter-vertex splat zero — kills double
+    // count
+    if (light.getType() != LightType::AREA)
+      return 1.0f;
+    return (s == 0) ? 1.0f : 0.0f;
+  }
+  if (k < 2)
+    return 1.0f; // single stored vertex - only one realizable strategy
 
-	// Combined chain x[0..k-1]: light-side first, then camera-side reversed.
-	struct CV { Vector pos, nrm; bool delta; };
-	std::vector<CV> x; x.reserve(k);
-	for (int i = 0; i < s; ++i)
-		x.push_back({ lightPath[i].position, lightPath[i].normal, lightPath[i].is_delta });
-	for (int i = t - 1; i >= 0; --i)
-		x.push_back({ camPath[i].position, camPath[i].normal, camPath[i].is_delta });
+  // Combined chain x[0..k-1]: light-side first, then camera-side reversed.
+  struct CV {
+    Vector pos, nrm;
+    bool delta;
+  };
+  std::vector<CV> x;
+  x.reserve(k);
+  for (int i = 0; i < s; ++i)
+    x.push_back(
+        {lightPath[i].position, lightPath[i].normal, lightPath[i].is_delta});
+  for (int i = t - 1; i >= 0; --i)
+    x.push_back({camPath[i].position, camPath[i].normal, camPath[i].is_delta});
 
-	const Vector lightPos = light.getPosition();
-	const Vector camPos   = scene->getCamera().getPosition();
+  const Vector lightPos = light.getPosition();
+  const Vector camPos = scene->getCamera().getPosition();
 
-	auto scatterEdge = [&](const CV& from, const CV& to, const Vector& dir, double d2) -> double {
-		if (from.delta) return 1.0; // deterministic specular bounce
-		double cosFrom = dot(from.nrm, dir);
-		double pdfW = (cosFrom > 0.0) ? cosFrom / PI_HI : 0.0;
-		return pdfWtoA((float)pdfW, std::abs(dot(to.nrm, dir)), (float)d2);
-	};
+  auto scatterEdge = [&](const CV &from, const CV &to, const Vector &dir,
+                         double d2) -> double {
+    if (from.delta)
+      return 1.0; // deterministic specular bounce
+    double cosFrom = dot(from.nrm, dir);
+    double pdfW = (cosFrom > 0.0) ? cosFrom / PI_HI : 0.0;
+    return pdfWtoA((float)pdfW, std::abs(dot(to.nrm, dir)), (float)d2);
+  };
 
-	auto pathAreaPdf = [&](int sp) -> double {
-		const int tp = k - sp;
-		if (sp < 0 || tp < 0) return 0.0;
-		if (sp >= 1 && x[sp - 1].delta) return 0.0;
-		if (tp >= 1 && x[sp].delta) return 0.0;
-		double p = 1.0;
-		Vector dir; double d2;
-		auto edge = [&](const Vector& a, const Vector& b) { Vector d = b - a; d2 = d.length2(); dir = d; dir.normalize(); };
+  auto pathAreaPdf = [&](int sp) -> double {
+    const int tp = k - sp;
+    if (sp < 0 || tp < 0)
+      return 0.0;
+    if (sp >= 1 && x[sp - 1].delta)
+      return 0.0;
+    if (tp >= 1 && x[sp].delta)
+      return 0.0;
+    double p = 1.0;
+    Vector dir;
+    double d2;
+    auto edge = [&](const Vector &a, const Vector &b) {
+      Vector d = b - a;
+      d2 = d.length2();
+      dir = d;
+      dir.normalize();
+    };
 
-		if (sp >= 1) {
-			if (light.getType() == LightType::AREA) {
-				// Emitter point sampled ON the quad: pdf = 1/area (area measure), no directional
-				// factor. The cosine emission pdf only appears on the emitter->next edge (sp>=2).
-				p *= 1.0 / light.getArea();
-				for (int i = 1; i < sp; ++i) {
-					edge(x[i - 1].pos, x[i].pos);
-					if (i == 1) {
-						double cosEmit = dot(light.getNormal(), dir);
-						double pdfW = (cosEmit > 0.0) ? cosEmit / PI_HI : 0.0;
-						p *= pdfWtoA((float)pdfW, std::abs(dot(x[1].nrm, dir)), (float)d2);
-					} else {
-						p *= scatterEdge(x[i - 1], x[i], dir, d2);
-					}
-				}
-			} else {
-				edge(lightPos, x[0].pos);
-				p *= pdfWtoA((float)(1.0 / (4.0 * PI_HI)), std::abs(dot(x[0].nrm, dir)), (float)d2);
-				for (int i = 1; i < sp; ++i) {
-					edge(x[i - 1].pos, x[i].pos);
-					p *= scatterEdge(x[i - 1], x[i], dir, d2);
-				}
-			}
-		}
+    if (sp >= 1) {
+      if (light.getType() == LightType::AREA) {
+        // Emitter point sampled ON the quad: pdf = 1/area (area measure), no
+        // directional factor. The cosine emission pdf only appears on the
+        // emitter->next edge (sp>=2).
+        p *= 1.0 / light.getArea();
+        for (int i = 1; i < sp; ++i) {
+          edge(x[i - 1].pos, x[i].pos);
+          if (i == 1) {
+            double cosEmit = dot(light.getNormal(), dir);
+            double pdfW = (cosEmit > 0.0) ? cosEmit / PI_HI : 0.0;
+            p *= pdfWtoA((float)pdfW, std::abs(dot(x[1].nrm, dir)), (float)d2);
+          } else {
+            p *= scatterEdge(x[i - 1], x[i], dir, d2);
+          }
+        }
+      } else {
+        edge(lightPos, x[0].pos);
+        p *= pdfWtoA((float)(1.0 / (4.0 * PI_HI)), std::abs(dot(x[0].nrm, dir)),
+                     (float)d2);
+        for (int i = 1; i < sp; ++i) {
+          edge(x[i - 1].pos, x[i].pos);
+          p *= scatterEdge(x[i - 1], x[i], dir, d2);
+        }
+      }
+    }
 
-		if (tp >= 1) {
-			edge(camPos, x[k - 1].pos);
-			p *= pdfWtoA(cameraPdfW(dir), std::abs(dot(x[k - 1].nrm, dir)), (float)d2);
-			for (int i = k - 2; i >= sp; --i) {
-				edge(x[i + 1].pos, x[i].pos);
-				p *= scatterEdge(x[i + 1], x[i], dir, d2);
-			}
-		} else {
-			// tp == 0: whole path is light-generated; its last vertex connects to the
-			// pinhole. Pay the camera-importance density here so this (t=1 splat) strategy
-			// is measured on the same footing as the eye strategies that pay cameraPdfW.
-			edge(camPos, x[k - 1].pos);
-			p *= pdfWtoA(cameraPdfW(dir), std::abs(dot(x[k - 1].nrm, dir)), (float)d2);
-		}
-		return p;
-	};
+    if (tp >= 1) {
+      edge(camPos, x[k - 1].pos);
+      p *=
+          pdfWtoA(cameraPdfW(dir), std::abs(dot(x[k - 1].nrm, dir)), (float)d2);
+      for (int i = k - 2; i >= sp; --i) {
+        edge(x[i + 1].pos, x[i].pos);
+        p *= scatterEdge(x[i + 1], x[i], dir, d2);
+      }
+    } else {
+      // tp == 0: whole path is light-generated; its last vertex connects to the
+      // pinhole. Pay the camera-importance density here so this (t=1 splat)
+      // strategy is measured on the same footing as the eye strategies that pay
+      // cameraPdfW.
+      edge(camPos, x[k - 1].pos);
+      p *= pdfWtoA(cameraPdfW(dir), std::abs(dot(x[k - 1].nrm, dir)), (float)d2);
+    }
+    return p;
+  };
 
-	const double pUsed = pathAreaPdf(s);
-	if (pUsed <= 0.0) return 0.0;
+  const double pUsed = pathAreaPdf(s);
+  if (pUsed <= 0.0)
+    return 0.0;
 
-	double denom = 0.0;
-	for (int sp = 0; sp <= k; ++sp) denom += pathAreaPdf(sp);
-	if (denom <= 0.0) return 0.0;
-	return (float)(pUsed / denom);
+  double denom = 0.0;
+  for (int sp = 0; sp <= k; ++sp)
+    denom += pathAreaPdf(sp);
+  if (denom <= 0.0)
+    return 0.0;
+  return (float)(pUsed / denom);
 }
 
 // s=0: camera ray hit an emitter directly. Balance weight vs. the strategies that
@@ -610,7 +634,7 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 	for (const Light& light : lights) {
 		std::vector<PathVertex> lightPath = getLigthPath(light);
 
-		// s=1, t>=1: NEE (direct illumination from the light)
+		// s=1, t>=1 (direct illumination from the light)
 		if (debugMode == BDPTDebugMode::ALL || debugMode == BDPTDebugMode::NEE_ONLY) {
 			for (int t = 0; t < (int)cameraPath.size(); t++) {
 				if (cameraPath[t].is_delta) continue;
@@ -619,7 +643,6 @@ Vector Pathtracer::computeColor(const Ray& cameraRay, Image& splat) const
 				float w = 1.0f;
 				if (debugMode == BDPTDebugMode::ALL) {
 					if (light.getType() == LightType::AREA) {
-						// Sampled emitter point is the single light-path vertex (s=1).
 						std::vector<PathVertex> neeLight(1);
 						neeLight[0].position = lp;
 						neeLight[0].normal   = light.getNormal();

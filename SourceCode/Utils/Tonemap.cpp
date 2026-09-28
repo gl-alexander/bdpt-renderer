@@ -2,8 +2,6 @@
 #include <cmath>
 #include <algorithm>
 
-// Geometric mean of Rec.709 luminance — the scene "key" for auto-exposure.
-// The epsilon keeps log(0) finite for fully black pixels.
 float Tonemap::logAverageLuminance(const Image& image) {
 	const unsigned height = image.size();
 	const unsigned width = image[0].size();
@@ -21,13 +19,11 @@ void Tonemap::apply(Image& image, float exposure) {
 	const unsigned height = image.size();
 	const unsigned width = image[0].size();
 
-	// Auto-exposure: scale the scene key to middle-grey so dark scenes don't
-	// crush and bright ones don't blow out, without hand-tuning light intensity.
+	// auto-exposure: scale the scene key to middle-grey
 	float logAvg = logAverageLuminance(image);
 	float scale = (logAvg > 0.0f ? TONEMAP_KEY / logAvg : 1.0f) * exposure;
 
-	// Per-channel Reinhard x/(1+x) → smooth [0,inf)->[0,1) rolloff (no hard clip),
-	// then gamma for display. Final clamp guards FP slop only.
+	// per-channel Reinhard x/(1+x) to  smooth [0,inf)->[0,1) rolloff (no hard clip)
 	const float invGamma = 1.0f / TONEMAP_GAMMA;
 	for (unsigned r = 0; r < height; r++)
 		for (unsigned c = 0; c < width; c++) {
