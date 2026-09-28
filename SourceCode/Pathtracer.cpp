@@ -1,4 +1,5 @@
 #include "Pathtracer.h"
+#include "Utils/Tonemap.h"
 #include <thread>
 #include <mutex>
 #include <cmath>
@@ -67,11 +68,15 @@ Image Pathtracer::renderScene() const
 	}
 
 	const float mult = 1.0f / scene->getSettings().raysPerPixel;
-	const char* expEnv = std::getenv("BDPT_EXPOSURE");
-	const float exposure = expEnv ? (float)atof(expEnv) : 1.0f;
+
+	// Resolve the linear HDR radiance (camera path + light-tracing splats) in place,
+	// then apply the display transform (auto-exposure + Reinhard + gamma).
 	for (unsigned r = 0; r < imageHeight; r++)
 		for (unsigned c = 0; c < imageWidth; c++)
-			image[r][c] = ((image[r][c] + splat[r][c] * mult) * exposure).clamp(0, 1);
+			image[r][c] = image[r][c] + splat[r][c] * mult;
+
+	const char* expEnv = std::getenv("BDPT_EXPOSURE");
+	Tonemap::apply(image, expEnv ? (float)atof(expEnv) : 1.0f);
 
 	if (std::getenv("BDPT_CAUSTIC")) {
 		fprintf(stderr,
