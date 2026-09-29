@@ -75,7 +75,10 @@ Image Pathtracer::renderScene() const
 			image[r][c] = image[r][c] + splat[r][c] * mult;
 
 	const char* expEnv = std::getenv("BDPT_EXPOSURE");
-	Tonemap::apply(image, expEnv ? (float)atof(expEnv) : 1.0f);
+	// BDPT_NOHDR disables auto-exposure + Reinhard (gamma + clamp only) so the
+	// per-strategy debug passes are directly comparable in raw linear magnitude.
+	const bool hdr = std::getenv("BDPT_NOHDR") == nullptr;
+	Tonemap::apply(image, expEnv ? (float)atof(expEnv) : 1.0f, hdr);
 
 	if (std::getenv("BDPT_CAUSTIC")) {
 		fprintf(stderr,
